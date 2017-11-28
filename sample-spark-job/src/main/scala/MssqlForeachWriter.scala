@@ -14,19 +14,19 @@ import org.apache.spark.sql.jdbc.{JdbcDialects}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{ForeachWriter, Row}
 
-// Class that implements ForeachWriter interface to do a special processing
-// of output streaming data. In this case, inserting streaming data into
-// SQL Server.
+// Class that implements ForeachWriter interface to do a special processing of output streaming data.
+// In this case, inserting streaming data into SQL Server.
 //
-// This class creates a connection to SQL server local to the node that
-// spark executor is executing on. It creates a transaction for all the
-// rows that this executor processes. The insert statements are sent as
-// a batch of 1000 statements. At the end of the processing, we will commit
-// the transaction and close the connection.
+// This class creates a connection to SQL server local to the node that spark executor is executing on.
+// It creates a transaction for all the rows that this executor processes. The insert statements are
+// sent as a batch of 1000 statements. At the end of the processing, we will commit the transaction
+// and close the connection.
 //
 // The interface that we need to implement are open(), process() and close()
 //
-class MsSQLForeachWriter (tablename: String, connectionProperties: Map[String, String], schema: StructType ) extends ForeachWriter[Row] {
+class MsSQLForeachWriter (tablename: String,
+                          connectionProperties: Map[String, String],
+                          schema: StructType ) extends ForeachWriter[Row] {
   var count: Int = 0;
   var statement: PreparedStatement = _;
   var conn: Connection = _;
@@ -46,8 +46,7 @@ class MsSQLForeachWriter (tablename: String, connectionProperties: Map[String, S
     //
     conn = localNodeDataSource.getConnection(connectionProperties("user"), connectionProperties("password"))
 
-    // Do not auto-commit each statement. Instead, we will commit at
-    // the end to reduce the transaction overhead.
+    // Do not auto-commit each statement. Instead, we will commit at the end to reduce the transaction overhead.
     //
     conn.setAutoCommit(false)
 
@@ -80,11 +79,9 @@ class MsSQLForeachWriter (tablename: String, connectionProperties: Map[String, S
   }
 
   override def process(value: Row): Unit = {
-    // For each value in a row, convert Spark datatype to the correct JDBC
-    // data type for insert.
+    // For each value in a row, convert Spark datatype to the correct JDBC data type for insert.
     //
-    // JDBC statement set* (setString, setInt, etc) use 1 base offset.
-    // However, the array is 0 base offset.
+    // JDBC statement set* (setString, setInt, etc) use 1 base offset. However, the array is 0 base offset.
     //
     try {
       val dialect = JdbcDialects.get("jdbc:sqlserver")
@@ -111,12 +108,6 @@ class MsSQLForeachWriter (tablename: String, connectionProperties: Map[String, S
             case BinaryType => statement.setBytes(i + 1, value.getAs[Array[Byte]](i))
             case TimestampType => statement.setTimestamp(i + 1, value.getTimestamp(i))
             case DateType => statement.setDate(i + 1, value.getDate(i))
-            // value.get() for ArrayType will return scala.collection.Seq
-            //
-            //case a: ArrayType => statement.setString(i + 1, value.get(i).asInstanceOf[ArrayType].prettyJson)
-            // value.get() for MapType will return scala.collection.Map
-            //
-            //case m: MapType => statement.setString(i + 1, value.get(i).asInstanceOf[MapType].prettyJson)
             case _ => throw new IllegalArgumentException(s"Can't translate non-null value for field $i")
           }
         }
@@ -131,8 +122,7 @@ class MsSQLForeachWriter (tablename: String, connectionProperties: Map[String, S
 
     statement.addBatch()
 
-    // Batch 1000 insert statement as a batch before sending them to SQL
-    // for execution.
+    // Batch 1000 insert statements as a batch before sending them to SQL for execution.
     //
     if (count % 1000 == 0)
     {

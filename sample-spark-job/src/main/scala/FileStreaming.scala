@@ -194,9 +194,10 @@ object FileStreamingJob extends FileStreamingBase with NewSparkJob{
   def validate(sc: SparkContext, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
     val inputFormat = config.getString("inputFormat").toLowerCase
 
-    if (inputFormat != "csv" &&
-        inputFormat != "parquet" &&
-        inputFormat != "json") {
+    if (inputFormat != "csv" /*&&
+        // For CTP, we only support csv file format
+         inputFormat != "parquet" &&
+         inputFormat != "json"*/ ) {
       Bad(One(SingleProblem(s"Invalid inputFormat : $inputFormat.")))
     }
     else {
