@@ -1,4 +1,4 @@
-name := "mssql-spark-lib"
+name := "mssql-sample-spark-job"
 
 version := "1.0"
 
@@ -6,13 +6,11 @@ scalaVersion := "2.11.8"
 
 val sparkVersion = "2.2.0"
 
-// Default maven repository only have spark job server up to version 0.7.0.
-// However, we need 0.8.0 to use with spark 2.2.0
-//val jobserverVersion = "0.8.0-SNAPSHOT"
+val jobserverVersion = "0.8.0"
 
-// Additional repository for job server. This repository also does not contains 0.8.0 version.
+// Additional repository for job server.
 //
-//resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
+resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven/"
 
 libraryDependencies ++= Seq(
   // %% is used for project that was built with scala. This is because
@@ -24,7 +22,7 @@ libraryDependencies ++= Seq(
   //
   "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
   "org.apache.spark" %% "spark-streaming" % sparkVersion % "provided",
-  //"spark.jobserver" %% "job-server-api" % jobserverVersion % "provided",
+  "spark.jobserver" %% "job-server-api" % jobserverVersion % "provided",
 
   "com.microsoft.sqlserver" % "mssql-jdbc" % "latest.integration"
 )
