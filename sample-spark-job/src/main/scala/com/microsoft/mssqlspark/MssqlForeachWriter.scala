@@ -4,15 +4,15 @@
 
 package com.microsoft.mssqlspark
 
-import scala.collection.Map
 import java.sql.{Connection, PreparedStatement}
-
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils.getCommonJDBCType
 import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry
-import org.apache.spark.sql.jdbc.{JdbcDialects}
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils.getCommonJDBCType
+import org.apache.spark.sql.jdbc.JdbcDialects
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{ForeachWriter, Row}
+
+import scala.collection.Map
 
 // Class that implements ForeachWriter interface to do a special processing of output streaming data.
 // In this case, inserting streaming data into SQL Server.
