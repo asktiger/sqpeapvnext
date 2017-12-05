@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: 2017-10-16T18:58:58Z
+  labels:
+    app: mssql-compute-pool-master
+    component: mssql-compute-pool-master
+  name: service-master-nodeport
+spec:
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: port-1
+    port: 31000
+    protocol: TCP
+    targetPort: 8088
+  - name: port-2
+    port: 30001
+    protocol: TCP
+    targetPort: 50070
+  - name: port-13
+    port: 30002
+    protocol: TCP
+    targetPort: 8080
+  - name: port-14
+    port: 31433
+    protocol: TCP
+    targetPort: 1433
+  - name: port-15
+    port: 30003
+    targetPort: 9995
+  - name: port-16
+    port: 30004
+    targetPort: 8090
+  selector:
+    app: mssql-compute-pool-master
+    component: mssql-compute-pool-master
+  sessionAffinity: None
+  type: LoadBalancer
+status:
+  loadBalancer: {}

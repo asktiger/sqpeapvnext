@@ -1,0 +1,59 @@
+#!/bin/bash
+
+if [ "$MSSQL_SA_PASSWORD" == "" ]; then
+    echo 'Please set env variable MSSQL_SA_PASSWORD prior to running this script'
+elif [ "$MSSQL_IMPORT_PASSWORD" == "" ]; then
+    echo 'Please set env variable MSSQL_IMPORT_PASSWORD prior to running this script'
+elif [ "$MSSQL_EXTERNAL_PASSWORD" == "" ]; then
+    echo 'Please set env variable MSSQL_EXTERNAL_PASSWORD prior to running this script'
+elif [ "$DOCKER_USERNAME" == "" ]; then
+    echo 'Please set env variable DOCKER_USERNAME prior to running this script'
+elif [ "$DOCKER_PASSWORD" == "" ]; then
+    echo 'Please set env variable DOCKER_PASSWORD prior to running this script'
+elif [ "$DOCKER_EMAIL" == "" ]; then
+    echo 'Please set env variable DOCKER_EMAIL prior to running this script'
+else
+    ./delete  
+
+    ./deploy-secrets
+
+    ./deploy-master-local
+
+    echo 'waiting for master to be running'
+
+    status=$(kubectl get pods | grep "mssql-compute-pool-master-0" | awk -F ' ' '{ print $3 }')
+
+    while [ "$status" != "Running" ]
+    do
+        status=$(kubectl get pods | grep "mssql-compute-pool-master-0" | awk -F ' ' '{ print $3 }')
+        sleep 10
+    done
+
+    ./deploy-node
+
+    echo 'waiting for compute node to be running'
+
+    status=$(kubectl get pods | grep "mssql-compute-pool-node-1" | awk -F ' ' '{ print $3 }')
+
+    while [ "$status" != "Running" ]
+    do
+        status=$(kubectl get pods | grep "mssql-compute-pool-node-1" | awk -F ' ' '{ print $3 }')
+        sleep 10
+    done
+
+    ./setup-post-deployment
+
+    echo ====== Deployment completed. ======
+    echo
+
+    servername=$(kubectl get pods -o wide | grep "master" | awk '{ print $7 }')
+
+    if [ "$servername" == "minikube" ]; 
+    then
+        echo This is a minikube deployment. Use minikube VM as the server name.
+        servername=$(minikube ip)
+    fi
+
+    echo SQL server head node: $servername,31433
+
+fi

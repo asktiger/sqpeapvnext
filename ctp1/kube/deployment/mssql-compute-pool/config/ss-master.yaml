@@ -1,0 +1,102 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: mssql-compute-pool-master
+spec:
+  serviceName: service-master
+  selector:
+    matchLabels:
+      app: mssql-compute-pool-master
+  replicas: 1
+  volumeClaimTemplates:
+  - metadata:
+      name: pvc
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+  - metadata:
+      name: pvc-jobserver
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi
+  - metadata:
+      name: pvc-hdfs
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 50Gi
+  template:
+    metadata:
+      labels:
+        component: mssql-compute-pool-master
+        app: mssql-compute-pool-master
+    spec:
+      terminationGracePeriodSeconds: 0
+      volumes:
+      - name: secrets
+        secret:
+          secretName: mssql-compute-pool-secret
+      imagePullSecrets:
+      - name: mssql-private-registry
+      containers:
+      - name: mssql-compute-pool-master
+        command: ["/init-master.sh"]
+        image: private-repo.microsoft.com/mssql-private-preview/mssql-hadoop:latest
+        ports:
+        - containerPort: 8088
+          name: port-8088
+        - containerPort: 50070
+          name: port-50070
+        - containerPort: 50075
+          name: port-50075
+        - containerPort: 50020
+          name: port-50020
+        - containerPort: 9000
+          name: port-9000
+        - containerPort: 50010
+          name: port-50010
+        - containerPort: 8030
+          name: port-8030
+        - containerPort: 8031
+          name: port-8031
+        - containerPort: 8032
+          name: port-8032
+        - containerPort: 8033
+          name: port-8033
+        - containerPort: 8040
+          name: port-8040
+        - containerPort: 8042
+          name: port-8042
+        - containerPort: 8090
+          name: port-8090
+        - containerPort: 14000
+          name: port-14000
+        volumeMounts:
+        - mountPath: "/tmp/spark-jobserver/"
+          name: pvc-jobserver
+        - mountPath: "/root/hdfs/"
+          name: pvc-hdfs
+      - name: mssql-compute-pool-data
+        image: private-repo.microsoft.com/mssql-private-preview/mssql-data:latest
+        ports:
+        - containerPort: 1433
+          name: port-1433
+        volumeMounts:
+        - mountPath: "/var/opt/mssql"
+          name: pvc
+        - mountPath: "/root/secrets"
+          name: secrets
+          readOnly: true
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mssql-compute-pool-secret
+              key: mssql-compute-pool-sa
