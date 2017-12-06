@@ -1,6 +1,7 @@
 DECLARE @compute_pool_name nvarchar(255) = 'mssql-compute-pool'
 DECLARE @node_count int = 8
-EXEC [sp_compute_pool_support_create_linked_servers] @compute_pool_name, @node_count
+IF NOT EXISTS(SELECT * FROM sys.servers WHERE name LIKE CONCAT(@compute_pool_name, '-node%sa'))
+	EXEC [sp_compute_pool_support_create_linked_servers] @compute_pool_name, @node_count
 go
 
 -- Current CTP1 functionality does not have data movement support or predicate / aggregate pushdown.
@@ -46,7 +47,7 @@ end;
 -- Create view on the airlinedadta that looks at last 1 hour data of each engine
 -- and computes avg reading for some sensor
 	exec @cmd N'
-create or alter view AirlineSensorDataNorm
+create or alter view AirlineEngineSensorDataNorm
 as
 with sm
 as (
@@ -115,7 +116,7 @@ go
 -- Create external table on view on the compute node
 -- This will be used to run the query with the aggregations on each compute node & join with the high value data.
 --
-CREATE EXTERNAL TABLE AirlineSensorDataNorm (
+CREATE EXTERNAL TABLE AirlineEngineSensorDataNorm (
 	EngineId int,
 	tstamp datetime2(0),
 	"Bleed Air Channel" float,
@@ -136,7 +137,7 @@ WITH
 (  
   DATA_SOURCE = [mssql-compute-pool],  
   SCHEMA_NAME = 'dbo',  
-  OBJECT_NAME = 'AirlineSensorDataNorm',  
+  OBJECT_NAME = 'AirlineEngineSensorDataNorm',  
   DISTRIBUTION=ROUND_ROBIN  
 );
 go
@@ -145,7 +146,7 @@ go
 -- Join high value data with the high volume data in compute pool 
 --
 select e.AircraftRegistration, f.Origin, f.Destination, a.*
-  from AirlineSensorDataNorm as a
+  from AirlineEngineSensorDataNorm as a
   join high_value_data.dbo.AirlineEngines as e
     on e.EngineId = a.EngineId
   join high_value_data.dbo.FlightRoutes as f
