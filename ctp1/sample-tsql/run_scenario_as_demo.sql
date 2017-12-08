@@ -5,7 +5,7 @@
 -- Kubernetes configuration (K8s)
 --
 DECLARE @compute_pool_name NVARCHAR(max) = 'mssql-compute-pool'
-DECLARE @cluster_node_count INT = 8
+DECLARE @cluster_node_count INT = 2
 
 PRINT 'STEP 1: Initialize compute cluster'
 --        1. setup up 'map' management
