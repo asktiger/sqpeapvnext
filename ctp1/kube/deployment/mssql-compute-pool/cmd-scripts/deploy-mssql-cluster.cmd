@@ -1,4 +1,5 @@
 echo off
+setlocal enabledelayedexpansion
 
 REM ABORT IF ANY REQUIRED PASSWORD IS NOT SET
 IF "%MSSQL_SA_PASSWORD%" == "" (ECHO Please set env variable MSSQL_SA_PASSWORD prior to running this script 
@@ -36,16 +37,20 @@ if "%status%" NEQ "Running" (
 
 call deploy-node.cmd
 
+for /F "delims=: tokens=3" %%G in ('findstr /spi "replica" ..\config\ss-node.yaml') DO set nodeCount=%%G
+set nodeCount=%nodeCount: =%
+set /a lastNode=%nodeCount%-1
+
 echo 'waiting for compute node to be running'
 
 set status=
-for /f "tokens=3" %%A IN ('kubectl get pods ^| find "mssql-compute-pool-node-1"') do (
+for /f "tokens=3" %%A IN ('kubectl get pods ^| find "mssql-compute-pool-node-%lastNode%"') do (
     set status=%%A
 )
 
 :loopnode
 if "%status%" NEQ "Running" (
-    for /f "tokens=3" %%A IN ('kubectl get pods ^| find "mssql-compute-pool-node-1"') do (
+    for /f "tokens=3" %%A IN ('kubectl get pods ^| find "mssql-compute-pool-node-%lastNode%"') do (
         set status=%%A
     )
     timeout /nobreak /t 5 > NUL

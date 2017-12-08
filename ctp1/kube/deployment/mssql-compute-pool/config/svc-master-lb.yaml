@@ -31,6 +31,9 @@ spec:
   - name: port-16
     port: 30004
     targetPort: 8090
+  - name: port-17
+    port: 32000
+    targetPort: 14000
   selector:
     app: mssql-compute-pool-master
     component: mssql-compute-pool-master
