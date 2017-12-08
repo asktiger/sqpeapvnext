@@ -122,17 +122,3 @@ GO
 DECLARE @compute_pool_name NVARCHAR(max) = 'mssql-compute-pool'
 SELECT * FROM dm_compute_pool_jobs(@compute_pool_name)
 GO
-
--- Clean up old jobs/context
-DECLARE @compute_pool_name NVARCHAR(max) = 'mssql-compute-pool'
-SELECT * FROM dm_compute_pool_jobs(@compute_pool_name) WHERE status = 'RUNNING'
-DECLARE @jobId NVARCHAR(max) = (SELECT TOP 1 jobId FROM dm_compute_pool_jobs(@compute_pool_name) WHERE status = 'RUNNING')
-EXEC sp_compute_pool_job_delete @compute_pool_name, @jobId
-GO
-
-DECLARE @compute_pool_name NVARCHAR(max) = 'mssql-compute-pool'
-SELECT * FROM dm_compute_pool_jobs(@compute_pool_name)
-SELECT * FROM dm_compute_pool_jobs(@compute_pool_name) WHERE status = 'KILLED'
-DECLARE @context NVARCHAR(max) = (SELECT TOP 1 context FROM dm_compute_pool_jobs(@compute_pool_name) WHERE status = 'KILLED')
-EXEC sp_compute_pool_context_delete @compute_pool_name, @context
-GO

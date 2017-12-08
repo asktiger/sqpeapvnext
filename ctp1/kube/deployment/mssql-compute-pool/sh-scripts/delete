@@ -16,8 +16,12 @@ kubectl delete statefulset mssql-compute-pool-master --force --now --cascade=fal
 kubectl delete statefulset mssql-compute-pool-node --force --now --cascade=false
 
 kubectl delete pod mssql-compute-pool-master-0
-kubectl delete pod mssql-compute-pool-node-0
-kubectl delete pod mssql-compute-pool-node-1
+
+nodeCount=$(grep replica ../config/ss-node.yaml | awk '{ print $2 }')
+for ((node=0; node<$nodeCount; node++))
+do
+    kubectl delete pod mssql-compute-pool-node-$node
+done
 
 kubectl delete secret mssql-compute-pool-secret
 kubectl delete secret mssql-private-registry

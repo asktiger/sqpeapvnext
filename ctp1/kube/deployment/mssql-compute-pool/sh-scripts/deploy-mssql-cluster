@@ -31,13 +31,16 @@ else
 
     ./deploy-node
 
+    nodeCount=$(grep replica ../config/ss-node.yaml | awk '{ print $2 }')
+    lastnode=$(($nodeCount-1))
+
     echo 'waiting for compute node to be running'
 
-    status=$(kubectl get pods | grep "mssql-compute-pool-node-1" | awk -F ' ' '{ print $3 }')
+    status=$(kubectl get pods | grep "mssql-compute-pool-node-$lastnode" | awk -F ' ' '{ print $3 }')
 
     while [ "$status" != "Running" ]
     do
-        status=$(kubectl get pods | grep "mssql-compute-pool-node-1" | awk -F ' ' '{ print $3 }')
+        status=$(kubectl get pods | grep "mssql-compute-pool-node-$lastnode" | awk -F ' ' '{ print $3 }')
         sleep 10
     done
 
