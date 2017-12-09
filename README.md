@@ -1,4 +1,4 @@
-# SQL Server vNext - Early Adopter Program
+# SQL Server vNext - Early Adoption Program
 
 [CTP1](ctp1)
 
