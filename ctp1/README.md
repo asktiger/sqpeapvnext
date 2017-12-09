@@ -1,4 +1,4 @@
-# CTP1 Deployment Scripts & Samples
+# SQL Server vNext CTP1 Deployment Scripts & Samples
 
 [Documentation](documentation)
 
