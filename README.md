@@ -6,6 +6,6 @@ This folder contains SQL Server vNext CTP1 deployment scripts and samples folder
 
 git clone https://github.com/annashres/sqleapvnext
 
-[Getting Started](https://github.com/annashres/sqleapvnext/blob/master/ctp1/documentation/getting-started.docx)
+[Getting Started](https://github.com/annashres/sqleapvnext/raw/master/ctp1/documentation/getting-started.docx)
 
 This getting started document describes the SQL Server vNext CTP1 scenario, deployment steps, configuration and demo scenario.
