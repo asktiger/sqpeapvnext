@@ -140,17 +140,4 @@ WITH
   OBJECT_NAME = 'AirlineEngineSensorDataNorm',  
   DISTRIBUTION=ROUND_ROBIN  
 );
-go
-
-
--- Join high value data with the high volume data in compute pool 
---
-select e.AircraftRegistration, f.Origin, f.Destination, a.*
-  from AirlineEngineSensorDataNorm as a
-  join high_value_data.dbo.AirlineEngines as e
-    on e.EngineId = a.EngineId
-  join high_value_data.dbo.FlightRoutes as f
-    on f.AircraftRegistration = e.AircraftRegistration and f.EngineId = e.EngineId
- where a.EngineId in (9, 48) ;
-go
-
+GO

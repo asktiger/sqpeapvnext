@@ -17,7 +17,7 @@ IF "%DOCKER_EMAIL%" == "" (ECHO Please set env variable DOCKER_EMAIL prior to ru
 
 call delete.cmd
 call deploy-secrets.cmd
-call deploy-master-lb.cmd
+call deploy-master-local.cmd
 
 echo 'waiting for master to be running'
 

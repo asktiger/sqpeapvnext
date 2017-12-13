@@ -5,7 +5,7 @@ metadata:
   labels:
     app: mssql-compute-pool-master
     component: mssql-compute-pool-master
-  name: service-master-nodeport
+  name: mssql-compute-pool-svc-lb
 spec:
   externalTrafficPolicy: Cluster
   ports:

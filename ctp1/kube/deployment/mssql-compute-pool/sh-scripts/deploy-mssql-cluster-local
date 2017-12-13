@@ -17,7 +17,7 @@ else
 
     ./deploy-secrets
 
-    ./deploy-master-lb
+    ./deploy-master-local
 
     echo 'waiting for master to be running'
 
