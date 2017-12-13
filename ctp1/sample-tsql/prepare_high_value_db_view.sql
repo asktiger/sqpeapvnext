@@ -1,3 +1,7 @@
+-- Set context to sample database:
+--
+USE high_value_data
+go
 DECLARE @compute_pool_name nvarchar(255) = 'mssql-compute-pool'
 DECLARE @node_count int = 8
 IF NOT EXISTS(SELECT * FROM sys.servers WHERE name LIKE CONCAT(@compute_pool_name, '-node%sa'))

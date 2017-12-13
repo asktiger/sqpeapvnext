@@ -1,4 +1,9 @@
-﻿-- Welcome to Project Aris, a demo scenario: 
+﻿-- Set context to sample database:
+--
+USE high_value_data
+go
+
+-- Welcome to Project Aris, a demo scenario: 
 --		1. Spark Streaming into SQL Server Big Data cluster
 --		2. Fan-out query joining SQL Server high value data with SQL Server high volume in Big Data cluster
 
