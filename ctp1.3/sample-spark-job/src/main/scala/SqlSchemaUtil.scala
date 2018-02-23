@@ -16,10 +16,9 @@ import org.apache.spark.sql.jdbc.JdbcDialects
 
 import scala.collection.mutable
 
-// This is the base class for inferring schema from a csv file.
-// The output string of this function will be used in create table statement.
-// For example,
-// "processed" DATETIME2(3) , "id" INTEGER , "cycle" INTEGER
+// This is the base class for inferring schema from the csv files.
+//
+// TODO: We should work on converting the schema to correct SQL Server data type.
 //
 class SqlSchemaUtilBase {
   JdbcDialects.registerDialect(SqlServerDialect)
@@ -42,23 +41,59 @@ class SqlSchemaUtilBase {
 
     return strSchema
   }
-
-  /*
-    Instead of inferring schema from a sample file. If we want to create a specific schema in an external
-    table, we can hard coded the schema using this string.
-   */
-//  def getSchemaString(spark: SparkSession,
-//                      inputFilePath: String,
-//                      inputFormat: String,
-//                      overrideType: mutable.Map[String,String]) : String = {
-//    return "c1 INT, c2 DECIMAL(10,2), c3 DATETIME2";
-//  }
 }
 
-// This object is used for executing SqlSchemaUtilBase::getSchemaString from a spark job-server.
+// This object is used for executing SqlSchemaUtilBase::getSchemaString
+// from a spark streaming job. This should be a class path to used
+// when the job is submitted using spark-submit.
+// For spark job-server REST API submission, the class path should
+// be SqlSchemaUtilJob.
 //
-// The job expected a json input from the POST data content. The JSON must have object with inputFile key.
-// The value to the input file is the path to the input which the job should read to inferring schema.
+// There are 2 command line arguments which need to be passed to the jar.
+// 1. path to nput csv file which we will use to infer the schema.
+// 2. path to schema output file which the job will write the inferred
+//    schema to.
+//
+// For example:
+// spark-submit --class "SqlSchemaUtil" mssql-spark-lib-assembly-1.0.jar /airlinedata/inputfile.csv /airlinedata/schema.txt
+//
+object SqlSchemaUtil extends SqlSchemaUtilBase {
+  def main(args: Array[String]): Unit = {
+    if (args.length != 2) {
+      System.err.println("Usage: SqlSchemaUitl <path to input csv file> <path to output schema file>")
+      System.exit(1)
+    }
+
+    val inputFile = args(0)
+    val inputFormat = args(1)
+    val schemaOutputFile = args(2)
+
+    val spark = SparkSession
+      .builder
+      .appName("SqlSchemaUtil")
+      .enableHiveSupport()
+      .getOrCreate()
+
+    val overrideType = mutable.Map[String, String]()
+    val strSchema = getSchemaString(spark, inputFile, inputFormat, overrideType)
+
+    val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+
+    val output = fs.create(new Path(schemaOutputFile))
+
+    val os = new BufferedOutputStream(output)
+    os.write(strSchema.getBytes())
+    os.close()
+    fs.close()
+  }
+}
+
+// This object is used for executing SqlSchemaUtilBase::getSchemaString
+// from a spark job-server.
+//
+// The job expected a json input from the POST data content. The JSON
+// must have object with inputFile key. The value to the input file
+// is the path to the input which the job should read to inferring schema.
 //
 // For example:
 // curl "localhost:8090/jobs?appName-mssql&classpath=SqlSchemaUtilJob"
@@ -83,6 +118,7 @@ object SqlSchemaUtilJob extends SqlSchemaUtilBase with NewSparkJob {
     val spark = SparkSession
       .builder
       .appName("SqlSchemaUtil")
+      .enableHiveSupport()
       .getOrCreate()
 
     var overrideType = mutable.Map[String, String]()
@@ -102,7 +138,7 @@ object SqlSchemaUtilJob extends SqlSchemaUtilBase with NewSparkJob {
       }
     }
 
-    // If the user does not specify input format, then we assume it to be a csv.
+    // If the user does not specify input format, then we assume it to be csv.
     //
     try {
       inputFormat = data.getString("inputFormat")

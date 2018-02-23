@@ -17,8 +17,11 @@ import spark.jobserver.api.{JobEnvironment, SingleProblem, ValidationProblem, Sp
 import scala.collection.immutable.Map
 import scala.collection.mutable
 import scala.util.Try
+import scala.io.Source
 
 // This is the base class for start a spark streaming session.
+//
+// TODO: We should work on converting the schema to correct SQL Server data type.
 //
 class FileStreamingBase {
   val checkpointRootLocation = "/checkpoint"
@@ -48,6 +51,18 @@ class FileStreamingBase {
       .option("header", true)
       .schema(schema)
       .load(sourceDir)
+
+    // Read the data into a sql data frame as well
+    // Persist the data to hdfs as a parquet file and create a schema in Hive
+    // 
+    val sqlDf = spark.read
+      .format(inputFormat)
+      .option("header", true)
+      .schema(schema)
+      .load(sourceDir)
+
+    sqlDf.write.mode("overwrite").option("path", sourceDir + "/warehouse").saveAsTable(tableName)
+
 
     val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
     val checkpointPath = new Path(checkpointRootLocation, tableName)
@@ -88,13 +103,52 @@ class FileStreamingBase {
 
     query.awaitTermination()
   }
+}
 
-  /*
-  This function can be override with your custom spark code.
- */
-//  def StartStreaming(spark: SparkSession, inputOptions: Map[String, String], tableName: String, sourceDir: String, inputFormat: String) = {
-//    // Insert your code here.
-//  }
+// This object is used for starting spark streaming session using spark-submit
+//
+// The arguments to jar file are
+// 1: server name - sql server to connect to read the table schema
+// 2: port number
+// 3: username
+// 4: password
+// 5: database name
+// 6: table name
+// 7: Source directory for streaming. This must be a full
+//             URI - such as "file:///home/jarupat/aris/examples/inputdata/"
+// 8: Input format. This can be "csv", "parquet", "json".
+//
+// Example of full command line.
+// $> spark-submit --class "FileStreaming" mssql-spark-lib-assembly-1.0.jar <arguments>
+//
+object FileStreaming extends FileStreamingBase{
+  def main(args: Array[String]): Unit = {
+    if (args.length != 9) {
+      System.err.println("Usage: FileStreaming <servername> <port> <username> <password> <databasename>" +
+        " <tablename> <streaming source directory> <input file format> <enableCheckpoint>")
+      System.exit(1)
+    }
+
+    val inputOptions = Map(
+      "server" -> args(0),
+      "port" -> args(1),
+      "user" -> args(2),
+      "password" -> args(3),
+      "database" -> args(4),
+      "enableCheckpoint" -> args(8))
+
+    val tableName = args(5)
+    val sourceDir = args(6)
+    val inputFormat = args(7)
+
+    val spark = SparkSession
+      .builder
+      .appName(s"FileStreaming_$tableName")
+      .enableHiveSupport()
+      .getOrCreate()
+
+    StartStreaming(spark, inputOptions, tableName, sourceDir, inputFormat)
+  }
 }
 
 // This object is used for starting spark streaming session using spark job-server.
@@ -108,12 +162,12 @@ class FileStreamingBase {
 //   "database" : "<database to connect to>",
 //   "table" : "<table to insert data>",
 //   "sourceDir" : "<streaming source directory path>",
-//   "inputFormat" : "<input file data type - "csv">"
+//   "inputFormat" : "<input file data type - "csv", "parquet", "json">"
 // }
 //
 // Example
 // curl --request POST --header 'Content-type: application/json' "localhost:8090/jobs?appName=aris&classPath=FileStreamingJob"
-// --data-binary '{"server":"localhost", "port":"1433", "user":"user", "password":"password", "database":"mydb",
+// --data-binary '{"server":"localhost", "port":"1433", "user":"sa", "password":"password", "database":"mydb",
 // "table":"mytable", "sourceDir":"/myfiles", "inputFormat":"csv"}'
 //
 object FileStreamingJob extends FileStreamingBase with NewSparkJob{
@@ -134,6 +188,7 @@ object FileStreamingJob extends FileStreamingBase with NewSparkJob{
     val spark = SparkSession
       .builder
       .appName("FileStreamingJob_"+ data("table"))
+      .enableHiveSupport()
       .getOrCreate()
 
     StartStreaming(spark, data, data("table"), data("sourceDir"), data("inputFormat"))
@@ -154,17 +209,26 @@ object FileStreamingJob extends FileStreamingBase with NewSparkJob{
   def validate(sc: SparkContext, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
     val inputFormat = config.getString("inputFormat").toLowerCase
 
-    if (inputFormat != "csv" ) {
+    if (inputFormat != "csv" &&
+        inputFormat != "parquet" &&
+        inputFormat != "json") {
       Bad(One(SingleProblem(s"Invalid inputFormat : $inputFormat.")))
     }
     else {
       val enableCheckpoint = Try(config.getString("checkpoint")).getOrElse(false)
 
+      // Read secrets
+      val username = config.getString("user")
+      val secretPath = "/root/secrets/" + username.toLowerCase
+      val bufferedFile = Source.fromFile(secretPath)
+      val password = bufferedFile.getLines().next()
+      bufferedFile.close()
+
       val inputMap = Map(
         "server" -> config.getString("server"),
         "port" -> config.getString("port"),
-        "user" -> config.getString("user"),
-        "password" -> config.getString("password"),
+        "user" -> username,
+        "password" -> password,
         "database" -> config.getString("database"),
         "table" -> config.getString("table"),
         "sourceDir" -> config.getString("parameter"),
