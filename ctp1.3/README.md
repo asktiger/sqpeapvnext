@@ -8,7 +8,7 @@ This folder contains documentation for SQL Server vNext CTP1.3 including getting
 
 This folder contains the scripts for configuration of the database for storing/querying the high value data  on the head node. The configuration steps are documented in the "Bring your own high value database" section of the getting started document.
 
-[Kube](kube\deployment\mssql-compute-pool)
+[Kube](kube/deployment/mssql-compute-pool)
 
 This folder contains the deployment scripts that will deploy SQL Server vNext CTP1.3 on a Kubernetes cluster.
 
