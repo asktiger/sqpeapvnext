@@ -1,0 +1,264 @@
+#!/usr/bin/python3
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+
+from subprocess import call, check_output
+from string import Template
+
+import base64
+import json
+import re
+import requests
+import time
+import traceback
+
+class ArisClient:
+    def __init__(self, serverAddress, username, password):
+        self.serverAddress = serverAddress
+        self.username = username
+        self.password = password
+
+    def getHome(self):
+        """
+        Test method
+        """
+
+        url = '{0}'.format(self.serverAddress)
+        response = requests.get(url, auth = (self.username, self.password))
+        if response.status_code != requests.codes.ok:
+            print("Response:")
+            print(json.dumps(response.json(), indent=4, sort_keys=True))
+            response.raise_for_status()
+
+        return response.json()
+
+    def createCluster(self, clusterConfig):
+        """
+        Create cluster
+        """
+
+        url = '{0}/clusters'.format(self.serverAddress)
+        response = requests.post(url, auth = (self.username, self.password), data = clusterConfig)
+        if response.status_code != requests.codes.ok:
+            print("Response:")
+            print(json.dumps(response.json(), indent=4, sort_keys=True))
+            response.raise_for_status()
+
+        return response.json()
+
+    def deleteCluster(self, name):
+        """
+        Delete cluster
+        """
+
+        url = '{0}/clusters/{1}'.format(self.serverAddress, name)
+        response = requests.delete(url, auth = (self.username, self.password))
+        if response.status_code != requests.codes.ok:
+            print("Response:")
+            print(json.dumps(response.json(), indent=4, sort_keys=True))
+            response.raise_for_status()
+
+        return response.json()
+
+def getConfigFromTemplate(templateFile):
+    with open(templateFile, "r") as f:
+        template = f.read()
+        s = Template(template)
+        config = s.substitute(os.environ)
+        return config
+
+def getControllerHost(clusterPlatform):
+    # Check if controller is up first
+    #
+
+    while True:
+        time.sleep(5)
+        svc_output = check_output(["kubectl", "get", "svc", "mssql-controller"])
+        pod_output = check_output(["kubectl", "get", "pods", "mssql-controller"])
+
+        if b"pending" in svc_output or b"Running" not in pod_output:
+            print("Waiting for controller to come up...")
+        else:
+            print("Controller deployed")
+            break
+
+    if clusterPlatform.lower() == 'aks' or clusterPlatform.lower() == "acs":
+        # Get the IP addresss of the load balancer in case of AKS
+        #
+        loadBalancerIP = check_output(["kubectl", "get", "svc", "mssql-controller", "-o", "jsonpath=\"{.status.loadBalancer.ingress[0].ip}\""])
+        return loadBalancerIP.decode('utf-8').replace("\"", "")
+    elif clusterPlatform == 'minikube':
+        # Get the IP addresss of the node in case of Minikube
+        #
+        hostIP = check_output(["kubectl", "get", "node", "-o", "jsonpath=\"{.items[0].status.addresses[?(@.type==\"InternalIP\")].address}\""])
+        return hostIP.decode('utf-8').replace("\"", "")
+    else:
+        print("Cluster Platform is not valid. Only available options: \"minikube\", \"acs\" or \"aks\"")
+        sys.exit(1)
+
+def createCluster():
+    checkEnvironmentVariables()
+
+    # Setup private repository secret if needed.
+    #
+    if os.getenv("DOCKER_REGISTRY") != "repo.corp.microsoft.com":
+        call(["kubectl", "create", "secret", "docker-registry", "mssql-private-registry",
+              "--docker-server=" + os.environ["DOCKER_REGISTRY"],
+              "--docker-username=" + os.environ["DOCKER_USERNAME"],
+              "--docker-password=" + os.environ["DOCKER_PASSWORD"],
+              "--docker-email=" + os.environ["DOCKER_EMAIL"]])
+
+    scriptPath = os.path.dirname(os.path.realpath(__file__))
+
+    controllerTemplateFile = os.path.join(scriptPath, "templates", "mssql-controller-local.yaml.tmpl")
+    clusterPlatform = os.environ["CLUSTER_PLATFORM"]
+    if clusterPlatform.lower() == "aks" or clusterPlatform.lower() == "acs":
+        controllerTemplateFile = os.path.join(scriptPath, "templates", "mssql-controller-lb.yaml.tmpl")
+
+    # Deploy Controller
+    #
+    controllerConfig = os.path.join(scriptPath, "mssql-controller.yaml")
+    with open(controllerConfig, "w") as f:
+        f.write(getConfigFromTemplate(controllerTemplateFile))
+
+    print("Deploying controller...")
+    call(["kubectl", "create", "-f", controllerConfig])
+    os.remove(controllerConfig)
+
+    controllerHost = getControllerHost(clusterPlatform)
+    controllerPort = '30080'
+    controllerEndpoint = "http://" + controllerHost + ":" + controllerPort
+    print("Controller Endpoint: %s" % controllerEndpoint)
+
+    os.environ["BASE64_MSSQL_SA_PASSWORD"] = base64.b64encode(bytes(os.environ["MSSQL_SA_PASSWORD"], 'utf-8')).decode('utf-8')
+    os.environ["BASE64_MSSQL_EXTERNAL_PASSWORD"] = base64.b64encode(bytes(os.environ["MSSQL_EXTERNAL_PASSWORD"], 'utf-8')).decode('utf-8')
+    os.environ["BASE64_MSSQL_IMPORT_PASSWORD"] = base64.b64encode(bytes(os.environ["MSSQL_IMPORT_PASSWORD"], 'utf-8')).decode('utf-8')
+
+    print("Deploying cluster...")
+    print("Note: This can take few minutes if your cluster needs to download new docker images. " + 
+                 "For now, the create cluster API is synchronous and does not return status. " +
+                 "To see the status, run the following command in a new window: \"kubectl get all\"")
+
+    # Deploy Cluster
+    #
+    clusterTemplateFile = os.path.join(scriptPath, "templates", "mssql-cluster.json.tmpl")
+    clusterConfig = getConfigFromTemplate(clusterTemplateFile)
+
+    client = ArisClient(controllerEndpoint, os.environ['CONTROLLER_USERNAME'], os.environ['CONTROLLER_PASSWORD'])
+    output = client.createCluster(clusterConfig)
+
+    print("Response:")
+    print(json.dumps(output, indent=4, sort_keys=True))
+    print("Cluster deployed successfully")
+
+def deleteCluster():
+    """
+        Deleting default namespace doesn't work and we don't have other namespaces 
+        working just yet, therefore, directly using kubectl commands to delete the cluster.
+    """
+
+    # Get the number of nodes if possible
+    nodes = 2
+    try:
+        output = check_output(["kubectl", "describe", "statefulsets", "mssql-compute-pool-node"]).decode('utf-8')
+
+        p = "Replicas:[\s]*([\d]+)"
+        result = re.search(p, output)
+        nodes = int(result.group(1))
+    except Exception:
+        print("Could not retrieve number of nodes, using 1 as default.")
+
+    # Delete services and endpoints
+    call(["kubectl", "delete", "svc", "service-master", "--cascade=true"])
+    call(["kubectl", "delete", "svc", "service-master-nodeport", "--cascade=true"])
+    call(["kubectl", "delete", "svc", "service-master-lb", "--cascade=true"])
+    call(["kubectl", "delete", "endpoints", "service-master"])
+    call(["kubectl", "delete", "endpoints", "service-master-nodeport"])
+    call(["kubectl", "delete", "endpoints", "service-master-lb"])
+    call(["kubectl", "delete", "svc", "service-node", "--cascade=true"])
+    call(["kubectl", "delete", "endpoints", "service-node"])
+
+    # Delete statefulsets
+    call(["kubectl", "delete", "statefulset", "mssql-compute-pool-master", "--force", "--now", "--cascade=true", "--timeout=5s"])
+    call(["kubectl", "delete", "statefulset", "mssql-compute-pool-node", "--force", "--now", "--cascade=true"])
+    call(["kubectl", "delete", "statefulset", "mssql-compute-pool-master", "--force", "--now", "--cascade=false", "--timeout=5s"])
+    call(["kubectl", "delete", "statefulset", "mssql-compute-pool-node", "--force", "--now", "--cascade=false"])
+
+    # Delete master artifacts
+    call(["kubectl", "delete", "pod", "mssql-compute-pool-master-0"])
+    call(["kubectl", "delete", "pvc", "pvc-hdfs-mssql-compute-pool-master-0"])
+    call(["kubectl", "delete", "pvc", "pvc-jobserver-mssql-compute-pool-master-0"])
+    call(["kubectl", "delete", "pvc", "pvc-mssql-compute-pool-master-0"])
+
+    # Delete node artifacts
+    for i in range(0, nodes):
+        call(["kubectl", "delete", "pod", "mssql-compute-pool-node-" + str(i)])
+        call(["kubectl", "delete", "pvc", "pvc-hdfs-mssql-compute-pool-node-"+ str(i)])
+        call(["kubectl", "delete", "pvc", "pvc-mssql-compute-pool-node-" + str(i)])
+    
+    # Delete secrets
+    call(["kubectl", "delete", "secret", "mssql-compute-pool-secret"])
+    call(["kubectl", "delete", "secret", "mssql-private-registry"])
+
+    # Delete controller
+    call(["kubectl", "delete", "svc", "mssql-controller"])
+    call(["kubectl", "delete", "pod", "mssql-controller"])
+
+def printUsage():
+    print("syntax:\n\tmssqlctl command [name]")
+    print("commands:\n\tcreate|delete")
+
+
+def checkEnvironmentVariables():
+    """
+    Check necessary environment variables
+    """
+
+    envList = ["CLUSTER_NAME",
+               "CLUSTER_PLATFORM",
+               "CLUSTER_NODE_REPLICAS",
+               "CONTROLLER_USERNAME",
+               "CONTROLLER_PASSWORD",
+               "DOCKER_REGISTRY",
+               "DOCKER_REPOSITORY",
+               "MSSQL_SA_PASSWORD",
+               "MSSQL_EXTERNAL_PASSWORD",
+               "MSSQL_IMPORT_PASSWORD"]
+
+    for env in envList:
+        if os.getenv(env) is None:
+            print("Environment variable \"%s\" is not set." % env)
+            sys.exit(1)
+
+    # Set the default docker image tag if not set already.
+    #
+    if os.getenv("DOCKER_IMAGE_TAG") is None:
+        os.environ["DOCKER_IMAGE_TAG"] = "latest"
+
+def main():
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "create":
+            createCluster()
+        elif sys.argv[1] == "delete":
+            deleteCluster()
+        else:
+            print("Unknown command %s" % (sys.argv[1]))
+            printUsage()
+            sys.exit(1)
+    else:
+        printUsage()
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+        sys.exit(0)
+    except SystemExit as e:
+        raise
+    except:
+        traceback.print_exc()
+        sys.exit(1)

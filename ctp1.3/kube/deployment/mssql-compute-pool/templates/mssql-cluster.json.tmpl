@@ -1,0 +1,22 @@
+{
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "$CLUSTER_NAME"
+  },
+  "spec": {
+    "platform": "$CLUSTER_PLATFORM",
+    "node": {
+      "replicas": $CLUSTER_NODE_REPLICAS
+    }
+  },
+  "docker": {
+    "registry": "$DOCKER_REGISTRY",
+    "repository": "$DOCKER_REPOSITORY",
+    "imageTag": "$DOCKER_IMAGE_TAG"
+  },
+  "secrets": {
+    "mssqlSaPassword": "$BASE64_MSSQL_SA_PASSWORD",
+    "mssqlExternalPassword": "$BASE64_MSSQL_EXTERNAL_PASSWORD",
+    "mssqlImportPassword": "$BASE64_MSSQL_IMPORT_PASSWORD"
+  }
+}
